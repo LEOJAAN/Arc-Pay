@@ -5,6 +5,7 @@ import {
   Landmark,
   Settings,
   UsersRound,
+  ArrowLeftRight,
 } from "lucide-react";
 
 export const navItems = [
@@ -27,6 +28,11 @@ export const navItems = [
     title: "Treasury",
     href: "/treasury",
     icon: Landmark,
+  },
+  {
+    title: "Bridge",
+    href: "/bridge",
+    icon: ArrowLeftRight,
   },
   {
     title: "Settings",

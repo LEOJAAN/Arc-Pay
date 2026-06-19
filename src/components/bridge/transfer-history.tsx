@@ -1,6 +1,6 @@
 "use client";
 
-import { History } from "lucide-react";
+import { History, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -17,6 +17,16 @@ export type BridgeTransfer = {
 
 interface TransferHistoryProps {
   transfers: BridgeTransfer[];
+}
+
+const EXPLORER_URLS: Record<string, string> = {
+  "Arc Testnet": "https://testnet.arcscan.app",
+  "Base Sepolia": "https://sepolia.basescan.org",
+  "Arbitrum Sepolia": "https://sepolia.arbiscan.io",
+};
+
+function getExplorerUrl(chain: string): string {
+  return EXPLORER_URLS[chain] || "https://testnet.arcscan.app";
 }
 
 export function TransferHistory({ transfers }: TransferHistoryProps) {
@@ -62,8 +72,34 @@ export function TransferHistory({ transfers }: TransferHistoryProps) {
                   key={tx.id}
                   className="grid grid-cols-[1.2fr_1.2fr_1fr_1fr_1.2fr] items-center border border-white/5 px-4 py-3 text-xs text-white hover:bg-white/[0.02] rounded-xl transition-all"
                 >
-                  <div className="font-medium text-slate-300">{tx.fromChain}</div>
-                  <div className="font-medium text-slate-300">{tx.toChain}</div>
+                  <div>
+                    <div className="font-medium text-slate-300">{tx.fromChain}</div>
+                    {tx.sourceTx && (
+                      <a
+                        href={`${getExplorerUrl(tx.fromChain)}/tx/${tx.sourceTx}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-primary hover:text-white flex items-center gap-0.5 mt-0.5 transition-all font-mono"
+                      >
+                        {tx.sourceTx.slice(0, 6)}...{tx.sourceTx.slice(-4)}{" "}
+                        <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                      </a>
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-medium text-slate-300">{tx.toChain}</div>
+                    {tx.destTx && (
+                      <a
+                        href={`${getExplorerUrl(tx.toChain)}/tx/${tx.destTx}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-primary hover:text-white flex items-center gap-0.5 mt-0.5 transition-all font-mono"
+                      >
+                        {tx.destTx.slice(0, 6)}...{tx.destTx.slice(-4)}{" "}
+                        <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                      </a>
+                    )}
+                  </div>
                   <div className="font-semibold text-white">
                     {parseFloat(tx.amount).toLocaleString(undefined, {
                       minimumFractionDigits: 2,
@@ -95,3 +131,4 @@ export function TransferHistory({ transfers }: TransferHistoryProps) {
     </Card>
   );
 }
+

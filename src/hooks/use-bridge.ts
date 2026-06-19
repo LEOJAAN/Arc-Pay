@@ -1,6 +1,10 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useAccount } from "wagmi";
+import { AppKit } from "@circle-fin/app-kit";
+import { createViemAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
+import { ArcTestnet, BaseSepolia, ArbitrumSepolia } from "@circle-fin/app-kit/chains";
 
 export type BridgeStatus =
   | "idle"
@@ -10,42 +14,165 @@ export type BridgeStatus =
   | "completed"
   | "failed";
 
+import { EIP1193Provider } from "viem";
+
+const APP_KIT_CHAINS: Record<
+  string,
+  typeof ArcTestnet | typeof BaseSepolia | typeof ArbitrumSepolia
+> = {
+  "Arc Testnet": ArcTestnet,
+  "Base Sepolia": BaseSepolia,
+  "Arbitrum Sepolia": ArbitrumSepolia,
+};
+
+interface BridgeEventPayload {
+  values?: {
+    txHash?: string;
+  };
+}
+
+interface BridgeStep {
+  name: string;
+  txHash?: string;
+}
+
+interface AppKitBridgeResult {
+  state?: string;
+  error?: string;
+  steps?: BridgeStep[];
+}
+
 export function useBridge() {
   const [status, setStatus] = useState<BridgeStatus>("idle");
   const [sourceTxHash, setSourceTxHash] = useState<string>("");
   const [destTxHash, setDestTxHash] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
+  const { connector, isConnected } = useAccount();
+
   const bridgeUSDC = useCallback(async (amount: string, fromChain: string, toChain: string) => {
     if (!amount || parseFloat(amount) <= 0) return;
     
     setError(null);
+    setSourceTxHash("");
+    setDestTxHash("");
     setStatus("preparing");
     
-    // In the future, this is where the Circle SDK / Arc App Kit logic will go:
-    // 1. Approve USDC token transfer on source chain.
-    // 2. Execute bridge transfer transaction.
-    // 3. Monitor destination chain for transfer fulfillment.
-    console.log("Mock bridging", amount, "USDC from", fromChain, "to", toChain);
-    
-    try {
-      // Mock execution sequence for UI testing (can be triggered later when SDK is integrated)
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setStatus("waiting-wallet");
-      
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      setStatus("bridging");
-      setSourceTxHash("0x8c6d482c3c1e2a0f8b1a8d11c828e1d5e3c8c2b7d6a5f78c9d0e1f2a3b4c5d6e");
-      
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      setStatus("completed");
-      setDestTxHash("0x9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b");
-    } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : "An unexpected bridging error occurred";
-      setError(errMsg);
+    if (!isConnected || !connector) {
+      setError("Wallet not connected");
       setStatus("failed");
+      return;
     }
-  }, []);
+
+    const fromChainObj = APP_KIT_CHAINS[fromChain];
+    const toChainObj = APP_KIT_CHAINS[toChain];
+
+    if (!fromChainObj || !toChainObj) {
+      setError(`Unsupported chain mapping: ${fromChain} -> ${toChain}`);
+      setStatus("failed");
+      return;
+    }
+
+    const kit = new AppKit();
+    let provider: EIP1193Provider;
+    try {
+      provider = (await connector.getProvider()) as EIP1193Provider;
+    } catch (err) {
+      console.error("Error getting provider:", err);
+      setError("Failed to initialize wallet provider.");
+      setStatus("failed");
+      return;
+    }
+
+    let adapter;
+    try {
+      adapter = await createViemAdapterFromProvider({ provider });
+    } catch (err) {
+      console.error("Error creating viem adapter:", err);
+      setError("Failed to connect wallet to Circle App Kit.");
+      setStatus("failed");
+      return;
+    }
+
+    // Set up step-by-step event listeners
+    const approveHandler = (payload: BridgeEventPayload) => {
+      console.log("App Kit: bridge.approve event", payload);
+      setStatus("waiting-wallet");
+    };
+
+    const burnHandler = (payload: BridgeEventPayload) => {
+      console.log("App Kit: bridge.burn event", payload);
+      setStatus("bridging");
+      if (payload?.values?.txHash) {
+        setSourceTxHash(payload.values.txHash);
+      }
+    };
+
+    const fetchAttestationHandler = (payload: BridgeEventPayload) => {
+      console.log("App Kit: bridge.fetchAttestation event", payload);
+      setStatus("bridging");
+    };
+
+    const mintHandler = (payload: BridgeEventPayload) => {
+      console.log("App Kit: bridge.mint event", payload);
+      if (payload?.values?.txHash) {
+        setDestTxHash(payload.values.txHash);
+      }
+    };
+
+    kit.on("bridge.approve", approveHandler);
+    kit.on("bridge.burn", burnHandler);
+    kit.on("bridge.fetchAttestation", fetchAttestationHandler);
+    kit.on("bridge.mint", mintHandler);
+
+    try {
+      // Prompt user for initial step
+      setStatus("waiting-wallet");
+      const rawResult = await kit.bridge({
+        from: { adapter, chain: fromChainObj },
+        to: { adapter, chain: toChainObj },
+        amount,
+      });
+
+      console.log("App Kit: bridge result", rawResult);
+
+      const result = rawResult as AppKitBridgeResult;
+
+      if (result.state === "success" || result.state === "completed") {
+        setStatus("completed");
+        
+        // Extract hashes as fallback if event handlers missed them
+        const burnStep = result.steps?.find((s) => s.name === "burn" || s.name === "execute");
+        const mintStep = result.steps?.find((s) => s.name === "mint" || s.name === "claim");
+        
+        if (burnStep?.txHash) {
+          setSourceTxHash(burnStep.txHash);
+        }
+        if (mintStep?.txHash) {
+          setDestTxHash(mintStep.txHash);
+        }
+
+        return result;
+      } else {
+        throw new Error(result.error || "Bridge execution failed without success status");
+      }
+    } catch (err) {
+      console.error("Bridge execution error:", err);
+      const errMsg = err instanceof Error ? err.message : "An unexpected error occurred during the bridge process";
+      if (errMsg.includes("rejected") || errMsg.includes("User rejected")) {
+        setError("User rejected the transaction");
+      } else {
+        setError(errMsg);
+      }
+      setStatus("failed");
+    } finally {
+      // Clean up event listeners
+      kit.off("bridge.approve", approveHandler);
+      kit.off("bridge.burn", burnHandler);
+      kit.off("bridge.fetchAttestation", fetchAttestationHandler);
+      kit.off("bridge.mint", mintHandler);
+    }
+  }, [connector, isConnected]);
 
   const resetStatus = useCallback(() => {
     setStatus("idle");
@@ -63,3 +190,4 @@ export function useBridge() {
     resetStatus,
   };
 }
+

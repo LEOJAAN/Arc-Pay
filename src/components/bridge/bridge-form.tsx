@@ -13,8 +13,20 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { useArcWallet } from "@/components/wallet/use-arc-wallet";
 
 const CHAINS = ["Arc Testnet", "Base Sepolia", "Arbitrum Sepolia"];
+
+const EXPLORER_URLS: Record<string, string> = {
+  "Arc Testnet": "https://testnet.arcscan.app",
+  "Base Sepolia": "https://sepolia.basescan.org",
+  "Arbitrum Sepolia": "https://sepolia.arbiscan.io",
+};
+
+export function getExplorerUrl(chain: string): string {
+  return EXPLORER_URLS[chain] || "https://testnet.arcscan.app";
+}
 
 interface BridgeFormProps {
   balance: string;
@@ -24,6 +36,12 @@ interface BridgeFormProps {
   destinationChain: string;
   onSourceChainChange: (chain: string) => void;
   onDestinationChainChange: (chain: string) => void;
+  status: string;
+  sourceTxHash: string;
+  destTxHash: string;
+  error: string | null;
+  onBridge: (amount: string) => void;
+  isConnected: boolean;
 }
 
 export function BridgeForm({
@@ -34,8 +52,15 @@ export function BridgeForm({
   destinationChain,
   onSourceChainChange,
   onDestinationChainChange,
+  status,
+  sourceTxHash,
+  destTxHash,
+  error,
+  onBridge,
+  isConnected,
 }: BridgeFormProps) {
   const [amount, setAmount] = useState<string>("");
+  const { availableConnector, connect } = useArcWallet();
 
   const isSameChain = sourceChain === destinationChain;
   const isOverBalance = parseFloat(amount) > parseFloat(balance);
@@ -200,10 +225,12 @@ export function BridgeForm({
               <div className="text-slate-400">Fee:</div>
               <div className="text-right text-emerald-400">0.00 USDC</div>
 
-              <div className="text-slate-400 flex items-center gap-1">
-                <Clock className="h-3 w-3" /> Time:
+              <div className="col-span-2 text-slate-400 flex items-start gap-1.5 pt-1.5 border-t border-white/5 mt-1 font-sans">
+                <Clock className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+                <span className="text-[10px] leading-4 text-slate-400">
+                  Estimated time: ~2–10 minutes. Finality time may vary by testnet network conditions.
+                </span>
               </div>
-              <div className="text-right text-[#4f8cff]">2-3 minutes</div>
             </div>
           </div>
 
@@ -211,63 +238,147 @@ export function BridgeForm({
             <ArrowDown className="h-4 w-4 text-slate-600" />
           </div>
 
-          {/* 5. Bridge Button (Disabled) */}
+          {/* 5. Bridge Button */}
           <Button
             type="button"
-            disabled={isFormInvalid || true}
+            disabled={(isFormInvalid && isConnected) || status === "preparing" || status === "waiting-wallet" || status === "bridging"}
             variant="default"
-            className="w-full text-sm font-bold"
+            className="w-full text-sm font-bold animate-transition"
+            onClick={() => {
+              if (!isConnected) {
+                if (availableConnector) {
+                  connect({ connector: availableConnector });
+                } else {
+                  alert("Please connect your wallet using the button in the top header.");
+                }
+              } else {
+                onBridge(amount);
+              }
+            }}
           >
-            Bridge USDC
+            {!isConnected
+              ? "Connect Wallet"
+              : status === "preparing"
+              ? "Preparing..."
+              : status === "waiting-wallet"
+              ? "Waiting for Wallet..."
+              : status === "bridging"
+              ? "Bridging..."
+              : "Bridge USDC"}
           </Button>
 
-          {/* 6. Bridge Status Area (Hidden - future SDK integration) */}
-          <div className="hidden border-t border-white/5 pt-4 mt-2 space-y-3">
-            <div className="text-xs font-semibold text-slate-400 mb-1">Bridge Progress</div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-xs">
-                <div className="h-2 w-2 rounded-full bg-primary" />
-                <span className="text-slate-300">Preparing transaction...</span>
+          {/* 6. Bridge Status Area */}
+          {status !== "idle" && (
+            <div className="border-t border-white/5 pt-4 mt-2 space-y-3">
+              <div className="text-xs font-semibold text-slate-400 mb-1 flex items-center justify-between">
+                <span>Bridge Status</span>
+                {status === "failed" && (
+                  <Badge variant="secondary" className="text-[10px] py-0 px-2 bg-rose-500/10 border border-rose-500/20 text-rose-400">Failed</Badge>
+                )}
+                {status === "completed" && (
+                  <Badge variant="success" className="text-[10px] py-0 px-2">Completed</Badge>
+                )}
               </div>
-              <div className="flex items-center gap-2 text-xs opacity-50">
-                <div className="h-2 w-2 rounded-full bg-slate-600" />
-                <span className="text-slate-400">Waiting for wallet confirmation...</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs opacity-50">
-                <div className="h-2 w-2 rounded-full bg-slate-600 animate-pulse" />
-                <span className="text-slate-400">Bridging...</span>
-              </div>
-              <div className="flex items-center gap-2 text-xs opacity-50">
-                <div className="h-2 w-2 rounded-full bg-slate-600" />
-                <span className="text-slate-400">Completed</span>
-              </div>
-            </div>
-          </div>
+              <div className="space-y-2">
+                {/* Step 1: Preparing */}
+                <div className={cn("flex items-center gap-2 text-xs", 
+                  ["preparing", "waiting-wallet", "bridging", "completed"].includes(status) ? "text-slate-300" : "text-slate-500 opacity-50"
+                )}>
+                  <div className={cn("h-2 w-2 rounded-full", 
+                    status === "preparing" ? "bg-primary animate-pulse" : 
+                    ["waiting-wallet", "bridging", "completed"].includes(status) ? "bg-emerald-500" : "bg-slate-600"
+                  )} />
+                  <span>Preparing transaction</span>
+                </div>
 
-          {/* 7. Explorer Links Placeholder (Hidden - SDK integration) */}
-          <div className="hidden border-t border-white/5 pt-3 flex flex-col gap-1.5 text-[11px] text-slate-400">
-            <div className="flex justify-between items-center">
-              <span>Source TX Hash:</span>
-              <a
-                href="#"
-                className="text-primary hover:text-white flex items-center gap-1 transition-all"
-              >
-                0x8c6d482c... <ExternalLink className="h-3 w-3" />
-              </a>
+                {/* Step 2: Waiting Wallet */}
+                <div className={cn("flex items-center gap-2 text-xs", 
+                  ["waiting-wallet", "bridging", "completed"].includes(status) ? "text-slate-300" : "text-slate-500 opacity-50"
+                )}>
+                  <div className={cn("h-2 w-2 rounded-full", 
+                    status === "waiting-wallet" ? "bg-primary animate-pulse" : 
+                    ["bridging", "completed"].includes(status) ? "bg-emerald-500" : "bg-slate-600"
+                  )} />
+                  <span>Waiting for wallet confirmation</span>
+                </div>
+
+                {/* Step 3: Transaction Submitted */}
+                <div className={cn("flex items-center gap-2 text-xs", 
+                  (sourceTxHash || status === "completed") ? "text-slate-300" : "text-slate-500 opacity-50"
+                )}>
+                  <div className={cn("h-2 w-2 rounded-full", 
+                    (sourceTxHash || status === "completed") ? "bg-emerald-500" : "bg-slate-600"
+                  )} />
+                  <span>Transaction submitted</span>
+                </div>
+
+                {/* Step 4: Bridging In Progress */}
+                <div className={cn("flex items-center gap-2 text-xs", 
+                  ["bridging", "completed"].includes(status) ? "text-slate-300" : "text-slate-500 opacity-50"
+                )}>
+                  <div className={cn("h-2 w-2 rounded-full", 
+                    status === "bridging" ? "bg-primary animate-pulse" : 
+                    status === "completed" ? "bg-emerald-500" : "bg-slate-600"
+                  )} />
+                  <span>Bridging in progress</span>
+                </div>
+
+                {/* Step 5: Bridge Completed */}
+                <div className={cn("flex items-center gap-2 text-xs", 
+                  status === "completed" ? "text-slate-300" : "text-slate-500 opacity-50"
+                )}>
+                  <div className={cn("h-2 w-2 rounded-full", 
+                    status === "completed" ? "bg-emerald-500" : "bg-slate-600"
+                  )} />
+                  <span>Bridge completed</span>
+                </div>
+              </div>
+
+              {error && (
+                <div className="text-xs text-rose-400 mt-2 bg-rose-500/10 border border-rose-500/20 rounded-lg p-2.5 font-sans leading-normal">
+                  Error: {error}
+                </div>
+              )}
             </div>
-            <div className="flex justify-between items-center">
-              <span>Destination TX Hash:</span>
-              <a
-                href="#"
-                className="text-primary hover:text-white flex items-center gap-1 transition-all"
-              >
-                0x9a8b7c6d... <ExternalLink className="h-3 w-3" />
-              </a>
+          )}
+
+          {/* 7. Explorer Links */}
+          {(sourceTxHash || destTxHash) && (
+            <div className="border-t border-white/5 pt-3 flex flex-col gap-1.5 text-[11px] text-slate-400">
+              {sourceTxHash && (
+                <div className="flex justify-between items-center">
+                  <span>Source TX Hash:</span>
+                  <a
+                    href={`${getExplorerUrl(sourceChain)}/tx/${sourceTxHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:text-white flex items-center gap-1 transition-all font-mono"
+                  >
+                    {sourceTxHash.slice(0, 10)}...{sourceTxHash.slice(-8)}{" "}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
+              {destTxHash && (
+                <div className="flex justify-between items-center">
+                  <span>Destination TX Hash:</span>
+                  <a
+                    href={`${getExplorerUrl(destinationChain)}/tx/${destTxHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:text-white flex items-center gap-1 transition-all font-mono"
+                  >
+                    {destTxHash.slice(0, 10)}...{destTxHash.slice(-8)}{" "}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
             </div>
-          </div>
+          )}
 
         </CardContent>
       </Card>
     </div>
   );
 }
+

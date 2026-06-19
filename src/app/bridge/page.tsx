@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { HelpCircle } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useBridgeBalance } from "@/hooks/use-bridge-balance";
+import { useBridge } from "@/hooks/use-bridge";
+import { useArcWallet } from "@/components/wallet/use-arc-wallet";
 import { BalanceCard } from "@/components/bridge/balance-card";
 import { BridgeForm } from "@/components/bridge/bridge-form";
 import { TransferHistory, BridgeTransfer } from "@/components/bridge/transfer-history";
@@ -13,11 +15,75 @@ import { TransferHistory, BridgeTransfer } from "@/components/bridge/transfer-hi
 export default function BridgePage() {
   const [sourceChain, setSourceChain] = useState<string>("Arc Testnet");
   const [destinationChain, setDestinationChain] = useState<string>("Base Sepolia");
+  const [transfers, setTransfers] = useState<BridgeTransfer[]>([]);
 
-  const { balance, symbol, isLoading, refreshBalance } = useBridgeBalance(sourceChain);
+  const { address, isConnected } = useArcWallet();
+  const { balance, symbol, isLoading, refreshBalance } = useBridgeBalance(sourceChain, address);
 
-  // Initial empty transfers array matching the requirements
-  const transfers: BridgeTransfer[] = [];
+  const {
+    status,
+    sourceTxHash,
+    destTxHash,
+    error,
+    bridgeUSDC,
+    resetStatus,
+  } = useBridge();
+
+  useEffect(() => {
+    const saved = localStorage.getItem("bridge_transfers");
+    if (saved) {
+      try {
+        setTransfers(JSON.parse(saved));
+      } catch (err) {
+        console.error("Error parsing saved transfers:", err);
+      }
+    }
+  }, []);
+
+  const handleBridge = async (amount: string) => {
+    try {
+      const result = await bridgeUSDC(amount, sourceChain, destinationChain);
+      if (result) {
+        interface BridgeStep {
+          name: string;
+          txHash?: string;
+        }
+        const burnStep = result.steps?.find((s: BridgeStep) => s.name === "burn" || s.name === "execute");
+        const mintStep = result.steps?.find((s: BridgeStep) => s.name === "mint" || s.name === "claim");
+
+        const newTransfer: BridgeTransfer = {
+          id: Math.random().toString(36).substring(2, 9),
+          fromChain: sourceChain,
+          toChain: destinationChain,
+          amount: amount,
+          status: "Completed",
+          date: new Date().toLocaleString(),
+          sourceTx: burnStep?.txHash || sourceTxHash,
+          destTx: mintStep?.txHash || destTxHash,
+        };
+
+        const updated = [newTransfer, ...transfers];
+        setTransfers(updated);
+        localStorage.setItem("bridge_transfers", JSON.stringify(updated));
+
+        // Refresh balance automatically after successful bridge completion
+        refreshBalance();
+      }
+    } catch (err) {
+      console.error("Bridge handler error:", err);
+    }
+  };
+
+  // Reset status when user changes chains to prevent old transaction info from lingering
+  const handleSourceChainChange = (chain: string) => {
+    setSourceChain(chain);
+    resetStatus();
+  };
+
+  const handleDestinationChainChange = (chain: string) => {
+    setDestinationChain(chain);
+    resetStatus();
+  };
 
   return (
     <AppShell>
@@ -36,8 +102,14 @@ export default function BridgePage() {
             isLoadingBalance={isLoading}
             sourceChain={sourceChain}
             destinationChain={destinationChain}
-            onSourceChainChange={setSourceChain}
-            onDestinationChainChange={setDestinationChain}
+            onSourceChainChange={handleSourceChainChange}
+            onDestinationChainChange={handleDestinationChainChange}
+            status={status}
+            sourceTxHash={sourceTxHash}
+            destTxHash={destTxHash}
+            error={error}
+            onBridge={handleBridge}
+            isConnected={isConnected}
           />
         </div>
 
@@ -89,3 +161,4 @@ export default function BridgePage() {
     </AppShell>
   );
 }
+

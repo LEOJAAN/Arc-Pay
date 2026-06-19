@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { AlertTriangle } from "lucide-react";
+import { usePathname } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,16 +11,21 @@ import { useArcWallet } from "@/components/wallet/use-arc-wallet";
 
 export function UnsupportedNetworkWarning() {
   const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const { currentNetwork, isSwitching, isUnsupportedNetwork, switchToArcTestnet } = useArcWallet();
+  const { currentNetwork, isSwitching, isConnected, chainId, switchToArcTestnet } = useArcWallet();
 
-  if (!mounted || !isUnsupportedNetwork) {
+  const isBridgePage = pathname === "/bridge";
+  const allowedChainIds = isBridgePage ? [5042002, 84532, 421614] : [5042002];
+  const isUnsupported = isConnected && !allowedChainIds.includes(chainId);
+
+  if (!mounted || !isUnsupported) {
     return null;
   }
-
 
   return (
     <Card className="mb-6 border-amber-200 bg-amber-50 text-amber-950">
@@ -29,8 +35,10 @@ export function UnsupportedNetworkWarning() {
           <div>
             <p className="text-sm font-semibold">Unsupported network connected</p>
             <p className="mt-1 text-sm leading-6">
-              Current network: {currentNetwork?.name ?? "Unknown network"}. Arc Payroll only
-              supports {arcTestnet.name}. Payroll features are disabled until you switch.
+              Current network: {currentNetwork?.name ?? "Unknown network"}.{" "}
+              {isBridgePage
+                ? "The bridge supports Arc Testnet, Base Sepolia, and Arbitrum Sepolia. Please switch to one of these networks to bridge."
+                : `Arc Payroll only supports ${arcTestnet.name}. Payroll features are disabled until you switch.`}
             </p>
           </div>
         </div>
@@ -41,3 +49,4 @@ export function UnsupportedNetworkWarning() {
     </Card>
   );
 }
+

@@ -17,7 +17,8 @@ import {
   Loader2,
   X,
   AlertOctagon,
-  AlertTriangle
+  AlertTriangle,
+  Lock
 } from "lucide-react";
 import { useReadContract, useWriteContract, usePublicClient } from "wagmi";
 import { formatUnits, parseUnits } from "viem";
@@ -28,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { shortenAddress, useArcWallet } from "@/components/wallet/use-arc-wallet";
+import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 import { cn } from "@/lib/utils";
 
 type Contributor = {
@@ -653,415 +655,434 @@ export default function PayrollPage() {
           </div>
         )}
 
-        {/* Form Messages */}
-        {error && (
-          <div className="relative z-10 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 flex gap-3">
-            <AlertCircle className="h-5 w-5 shrink-0 text-rose-400" />
-            <span>{error}</span>
-          </div>
-        )}
-        {success && (
-          <div className="relative z-10 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex gap-3">
-            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
-            <span>{success}</span>
-          </div>
-        )}
+        {!isConnected ? (
+          <Card className="relative z-10 glass-card-component">
+            <CardContent className="py-16 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#6d5dfc]/10 border border-[#6d5dfc]/15 text-[#4f8cff] mx-auto mb-4 animate-pulse">
+                <Lock className="h-6 w-6" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-2">Payroll Access Locked</h3>
+              <p className="text-xs text-slate-400 mt-1 mb-6 max-w-sm mx-auto leading-relaxed">
+                Connect your wallet to generate payroll batches and manage contributor payouts.
+              </p>
+              <div className="flex justify-center">
+                <ConnectWalletButton />
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Form Messages */}
+            {error && (
+              <div className="relative z-10 text-xs text-rose-400 bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 flex gap-3">
+                <AlertCircle className="h-5 w-5 shrink-0 text-rose-400" />
+                <span>{error}</span>
+              </div>
+            )}
+            {success && (
+              <div className="relative z-10 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-4 flex gap-3">
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
+                <span>{success}</span>
+              </div>
+            )}
 
-        <div className="relative z-10 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          
-          {/* Left Panel: Creation & History */}
-          <div className="space-y-6">
-            
-            {/* Monthly Payroll Card */}
-            <Card className="glass-card-component">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-white">Monthly Payroll</CardTitle>
-                <CardDescription className="text-xs text-slate-400">
-                  Generate payroll for monthly contributors.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <form onSubmit={handleGenerateMonthlyBatch} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Select Month</label>
-                    <select
-                      value={selectedMonth}
-                      onChange={(e) => setSelectedMonth(e.target.value)}
-                      className="w-full rounded-xl bg-[#060f24] border border-white/8 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#6d5dfc] focus:ring-1 focus:ring-[#6d5dfc] transition-all"
-                    >
-                      {MONTH_OPTIONS.map((m) => (
-                        <option key={m} value={m} className="bg-[#060f24] text-white">
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Processes active contributors paid on a monthly schedule (e.g. 1st or 15th of the month) based on the selected month.
-                  </p>
-                  <Button type="submit" className="w-full btn-electric whitespace-nowrap gap-2">
-                    <Plus className="h-4.5 w-4.5" />
-                    Generate Monthly Batch
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-
-            {/* Weekly Payroll Card */}
-            <Card className="glass-card-component">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-white">Weekly Payroll</CardTitle>
-                <CardDescription className="text-xs text-slate-400">
-                  Generate payroll for weekly contributors.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <form onSubmit={handleGenerateWeeklyBatch} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Select Weekly Period</label>
-                    <select
-                      value={selectedWeeklyPeriodIndex}
-                      onChange={(e) => setSelectedWeeklyPeriodIndex(parseInt(e.target.value))}
-                      className="w-full rounded-xl bg-[#060f24] border border-white/8 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#6d5dfc] focus:ring-1 focus:ring-[#6d5dfc] transition-all"
-                    >
-                      {weeklyPeriods.map((period, index) => (
-                        <option key={index} value={index} className="bg-[#060f24] text-white">
-                          {period.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-relaxed">
-                    Processes active contributors paid on a weekly schedule (e.g. every Friday) who have a payout due during the selected period.
-                  </p>
-                  <Button type="submit" className="w-full btn-electric whitespace-nowrap gap-2">
-                    <Plus className="h-4.5 w-4.5" />
-                    Generate Weekly Batch
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-
-            {/* History Card */}
-            <Card className="glass-card-component">
-              <CardHeader>
-                <CardTitle className="text-sm font-medium text-slate-400">Payroll Run History</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {batches.length === 0 ? (
-                  <div className="text-center py-12 border border-white/5 rounded-2xl bg-white/[0.01]">
-                    <History className="h-10 w-10 text-slate-600 mx-auto mb-3" />
-                    <p className="text-sm font-semibold text-slate-300">No payroll runs found</p>
-                    <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                      Use the generator above to create your first monthly payroll run.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
-                    {batches.map((b) => {
-                      const isActive = b.id === activeBatchId;
-                      return (
-                        <div
-                          key={b.id}
-                          onClick={() => {
-                            setActiveBatchId(b.id);
-                            setError(null);
-                            setSuccess(null);
-                          }}
-                          className={cn(
-                            "flex items-center justify-between border rounded-xl px-4 py-3.5 cursor-pointer transition-all",
-                            isActive 
-                              ? "border-[#6d5dfc]/40 bg-[#6d5dfc]/10 hover:bg-[#6d5dfc]/12" 
-                              : "border-white/5 hover:border-white/10 bg-white/[0.01] hover:bg-white/[0.03]"
-                          )}
-                        >
-                          <div className="space-y-1">
-                            <p className="font-semibold text-white text-sm">{b.month}</p>
-                            <p className="text-xs text-slate-400">
-                              {b.recipientsCount} Recipients • {b.totalAmount.toLocaleString()} USDC
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge 
-                              variant={
-                                b.status === "Paid" ? "success" : 
-                                b.status === "Partially Paid" ? "warning" :
-                                b.status === "Approved" ? "blue" : "secondary"
-                              }
-                            >
-                              {b.status}
-                            </Badge>
-                            <ArrowRight className={cn(
-                              "h-4 w-4 transition-transform",
-                              isActive ? "text-[#4f8cff] translate-x-0.5" : "text-slate-600"
-                            )} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-          </div>
-
-          {/* Right Panel: Batch Detail & Breakdown */}
-          <div className="space-y-6">
-            {!activeBatch ? (
-              <Card className="glass-card-component flex flex-col items-center justify-center text-center p-12 min-h-[450px]">
-                <div className="h-14 w-14 rounded-2xl bg-white/5 border border-white/8 flex items-center justify-center text-slate-500 mb-4 animate-pulse">
-                  <CalendarDays className="h-6 w-6" />
-                </div>
-                <h3 className="text-md font-semibold text-slate-300">No active run selected</h3>
-                <p className="text-xs text-slate-500 mt-2 max-w-sm">
-                  Select a run from the history or generate a new month run to inspect recipient breakdowns, audit totals, and initiate payments.
-                </p>
-              </Card>
-            ) : (
+            <div className="relative z-10 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+              
+              {/* Left Panel: Creation & History */}
               <div className="space-y-6">
                 
-                {/* Review / Payout Workflow Card */}
-                <div className="glow-border-shell">
-                  <Card className="border-0 bg-[#060f24]/90 p-1">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center gap-2.5">
-                        <CheckCircle2 className="h-5 w-5 text-[#4f8cff]" />
-                        <div>
-                          <CardTitle className="text-base text-white font-semibold">Payroll pipeline review</CardTitle>
-                          <CardDescription className="text-xs text-slate-400 mt-1">
-                            Approve or disburse payments for {activeBatch.month}.
-                          </CardDescription>
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4 pt-1">
-                      
-                      {/* Workflow Details */}
-                      {activeBatch.status === "Draft" && (
-                        <div className="space-y-3">
-                          <p className="text-xs text-slate-300 leading-relaxed bg-white/5 border border-white/8 rounded-xl p-3.5">
-                            This batch is currently in <strong>Draft</strong> state. Verify that all salary details below are correct before submitting it for workspace review.
-                          </p>
-                          <Button 
-                            onClick={() => handleAdvanceStatus(activeBatch.id, "Pending")}
-                            className="w-full btn-electric gap-2"
-                          >
-                            <Play className="h-4 w-4" />
-                            Submit Batch for Approval
-                          </Button>
-                        </div>
-                      )}
-
-                      {activeBatch.status === "Pending" && (
-                        <div className="space-y-3">
-                          <p className="text-xs text-slate-300 leading-relaxed bg-white/5 border border-white/8 rounded-xl p-3.5">
-                            This batch is <strong>Pending Approval</strong>. Perform a final audit on salary amounts and wallet addresses.
-                          </p>
-                          <Button 
-                            onClick={() => handleAdvanceStatus(activeBatch.id, "Approved")}
-                            className="w-full btn-electric gap-2"
-                          >
-                            <ShieldCheck className="h-4.5 w-4.5" />
-                            Approve Payroll Run
-                          </Button>
-                        </div>
-                      )}
-
-                      {activeBatch.status === "Approved" && (
-                        <div className="space-y-3">
-                          <p className="text-xs text-slate-300 leading-relaxed bg-white/5 border border-white/8 rounded-xl p-3.5">
-                            This batch is **Approved**. You can now trigger the payout execution process to transfer USDC directly to contributor wallets.
-                          </p>
-                          <Button 
-                            onClick={() => setIsPayoutModalOpen(true)}
-                            className="w-full btn-electric gap-2"
-                          >
-                            <Send className="h-4 w-4" />
-                            Confirm Payout
-                          </Button>
-                        </div>
-                      )}
-
-                      {(activeBatch.status === "Paid" || activeBatch.status === "Partially Paid") && (
-                        <div className={cn(
-                          "space-y-3 border rounded-xl p-4",
-                          activeBatch.status === "Paid" 
-                            ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-400" 
-                            : "bg-amber-500/5 border-amber-500/10 text-amber-400"
-                        )}>
-                          <div className="flex items-center gap-2">
-                            <ShieldCheck className="h-5 w-5 shrink-0" />
-                            <span className="text-sm font-semibold">
-                              {activeBatch.status === "Paid" ? "Payroll Executed Successfully" : "Payroll Executed with Failures"}
-                            </span>
-                          </div>
-                          <p className="text-xs text-slate-300 leading-relaxed mt-1">
-                            Disbursement loop completed on {activeBatch.executedAt}. Payouts were signed and sent directly from the connected wallet.
-                          </p>
-                        </div>
-                      )}
-
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Approval Timeline */}
+                {/* Monthly Payroll Card */}
                 <Card className="glass-card-component">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-sm font-semibold text-white">Approval timeline</CardTitle>
+                    <CardTitle className="text-sm font-semibold text-white">Monthly Payroll</CardTitle>
+                    <CardDescription className="text-xs text-slate-400">
+                      Generate payroll for monthly contributors.
+                    </CardDescription>
                   </CardHeader>
-                  <CardContent className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-white/5">
-                    
-                    {/* Step 1: Draft */}
-                    <div className="relative flex gap-3 text-xs">
-                      <div className="absolute -left-5 mt-0.5 h-3 w-3 rounded-full border border-[#6d5dfc] bg-[#6d5dfc]/20 flex items-center justify-center shadow-[0_0_8px_rgba(109,93,252,0.4)]" />
-                      <div className="space-y-1">
-                        <p className="font-semibold text-white">Batch Compiled (Draft)</p>
-                        <p className="text-[10px] text-slate-400">Roster snapshot locked</p>
-                        <p className="text-[10px] text-[#4f8cff] font-mono">{activeBatch.createdAt}</p>
+                  <CardContent className="space-y-4">
+                    <form onSubmit={handleGenerateMonthlyBatch} className="space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Select Month</label>
+                        <select
+                          value={selectedMonth}
+                          onChange={(e) => setSelectedMonth(e.target.value)}
+                          className="w-full rounded-xl bg-[#060f24] border border-white/8 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#6d5dfc] focus:ring-1 focus:ring-[#6d5dfc] transition-all"
+                        >
+                          {MONTH_OPTIONS.map((m) => (
+                            <option key={m} value={m} className="bg-[#060f24] text-white">
+                              {m}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                    </div>
-
-                    {/* Step 2: Submitted */}
-                    <div className="relative flex gap-3 text-xs">
-                      {activeBatch.submittedAt ? (
-                        <>
-                          <div className="absolute -left-5 mt-0.5 h-3 w-3 rounded-full border border-[#6d5dfc] bg-[#6d5dfc]/20 flex items-center justify-center shadow-[0_0_8px_rgba(109,93,252,0.4)]" />
-                          <div className="space-y-1">
-                            <p className="font-semibold text-white">Submitted for Review</p>
-                            <p className="text-[10px] text-slate-400">Roster sent to workspace owner</p>
-                            <p className="text-[10px] text-[#4f8cff] font-mono">{activeBatch.submittedAt}</p>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="absolute -left-5 mt-0.5 h-3 w-3 rounded-full border border-white/10 bg-slate-900" />
-                          <div className="space-y-1 opacity-45">
-                            <p className="font-semibold text-slate-400">Submitted for Review</p>
-                            <p className="text-[10px] text-slate-500">Awaiting founder submission</p>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Step 3: Approved */}
-                    <div className="relative flex gap-3 text-xs">
-                      {activeBatch.approvedAt ? (
-                        <>
-                          <div className="absolute -left-5 mt-0.5 h-3 w-3 rounded-full border border-emerald-500 bg-emerald-500/20 flex items-center justify-center shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
-                          <div className="space-y-1">
-                            <p className="font-semibold text-emerald-400">Roster Approved</p>
-                            <p className="text-[10px] text-slate-400">Ready for wallet payout stage</p>
-                            <p className="text-[10px] text-emerald-400 font-mono">{activeBatch.approvedAt}</p>
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="absolute -left-5 mt-0.5 h-3 w-3 rounded-full border border-white/10 bg-slate-900" />
-                          <div className="space-y-1 opacity-45">
-                            <p className="font-semibold text-slate-400">Roster Approved</p>
-                            <p className="text-[10px] text-slate-500">Pending final authorization</p>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        Processes active contributors paid on a monthly schedule (e.g. 1st or 15th of the month) based on the selected month.
+                      </p>
+                      <Button type="submit" className="w-full btn-electric whitespace-nowrap gap-2">
+                        <Plus className="h-4.5 w-4.5" />
+                        Generate Monthly Batch
+                      </Button>
+                    </form>
                   </CardContent>
                 </Card>
 
-                {/* Batch breakdown table */}
+                {/* Weekly Payroll Card */}
                 <Card className="glass-card-component">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-semibold text-white">Contributor breakdown</CardTitle>
-                    <CardDescription className="text-xs text-slate-500">
-                      Roster configuration snapshot for {activeBatch.month}.
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-semibold text-white">Weekly Payroll</CardTitle>
+                    <CardDescription className="text-xs text-slate-400">
+                      Generate payroll for weekly contributors.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="pt-2">
-                    <div className="overflow-x-auto">
-                      <div className="min-w-[500px] space-y-1.5">
-                        
-                        {/* Headers */}
-                        <div className="grid grid-cols-[1.5fr_1.5fr_1fr_1fr] bg-white/5 px-4 py-2 text-xs font-semibold text-slate-400 rounded-lg">
-                          <span>CONTRIBUTOR / ROLE</span>
-                          <span>WALLET</span>
-                          <span>STATUS</span>
-                          <span className="text-right">SALARY AMOUNT</span>
-                        </div>
-
-                        {/* Rows */}
-                        {activeBatch.contributors.map(c => (
-                          <div 
-                            key={c.id} 
-                            className="grid grid-cols-[1.5fr_1.5fr_1fr_1fr] items-center border border-white/5 px-4 py-2.5 text-xs text-slate-300 rounded-lg"
-                          >
-                            <div className="truncate pr-2">
-                              <p className="font-semibold text-white truncate">{c.fullName}</p>
-                              <p className="text-[10px] text-slate-400 truncate mt-0.5">{c.role}</p>
-                              {c.frequency && c.scheduledDate && (
-                                <p className="text-[9px] text-[#4f8cff] truncate mt-0.5 font-medium">
-                                  {c.frequency} (Due {c.scheduledDate})
-                                </p>
-                              )}
-                            </div>
-                            
-                            <div className="flex items-center gap-1.5 font-mono text-slate-400">
-                              <span>{shortenAddress(c.walletAddress)}</span>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 px-1 hover:bg-white/10"
-                                onClick={() => handleCopy(c.id, c.walletAddress)}
-                                title="Copy address"
-                              >
-                                {copiedId === c.id ? (
-                                  <Check className="h-3 w-3 text-emerald-400" />
-                                ) : (
-                                  <Copy className="h-3 w-3 text-slate-500" />
-                                )}
-                              </Button>
-                            </div>
-
-                            <div>
-                              {c.status === "Paid" && c.txHash ? (
-                                <a 
-                                  href={`https://testnet.arcscan.app/tx/${c.txHash}`} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-emerald-400 flex items-center gap-1 hover:underline font-semibold"
-                                >
-                                  Mined
-                                  <ExternalLink className="h-3 w-3 shrink-0" />
-                                </a>
-                              ) : c.status === "Failed" ? (
-                                <span className="text-rose-400 font-semibold" title={c.errorMsg}>Failed</span>
-                              ) : c.status === "Pending" ? (
-                                <span className="text-amber-400 font-semibold flex items-center gap-1">
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                  Mining
-                                </span>
-                              ) : (
-                                <span className="text-slate-500">Unpaid</span>
-                              )}
-                            </div>
-
-                            <div className="text-right font-semibold text-white">
-                              {c.salaryAmount.toLocaleString()} USDC
-                            </div>
-                          </div>
-                        ))}
-
+                  <CardContent className="space-y-4">
+                    <form onSubmit={handleGenerateWeeklyBatch} className="space-y-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Select Weekly Period</label>
+                        <select
+                          value={selectedWeeklyPeriodIndex}
+                          onChange={(e) => setSelectedWeeklyPeriodIndex(parseInt(e.target.value))}
+                          className="w-full rounded-xl bg-[#060f24] border border-white/8 px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#6d5dfc] focus:ring-1 focus:ring-[#6d5dfc] transition-all"
+                        >
+                          {weeklyPeriods.map((period, index) => (
+                            <option key={index} value={index} className="bg-[#060f24] text-white">
+                              {period.label}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                    </div>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        Processes active contributors paid on a weekly schedule (e.g. every Friday) who have a payout due during the selected period.
+                      </p>
+                      <Button type="submit" className="w-full btn-electric whitespace-nowrap gap-2">
+                        <Plus className="h-4.5 w-4.5" />
+                        Generate Weekly Batch
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+
+                {/* History Card */}
+                <Card className="glass-card-component">
+                  <CardHeader>
+                    <CardTitle className="text-sm font-medium text-slate-400">Payroll Run History</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {batches.length === 0 ? (
+                      <div className="text-center py-12 border border-white/5 rounded-2xl bg-white/[0.01]">
+                        <History className="h-10 w-10 text-slate-600 mx-auto mb-3" />
+                        <p className="text-sm font-semibold text-slate-300">No payroll runs found</p>
+                        <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                          Use the generator above to create your first monthly payroll run.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-[350px] overflow-y-auto pr-1">
+                        {batches.map((b) => {
+                          const isActive = b.id === activeBatchId;
+                          return (
+                            <div
+                              key={b.id}
+                              onClick={() => {
+                                setActiveBatchId(b.id);
+                                setError(null);
+                                setSuccess(null);
+                              }}
+                              className={cn(
+                                "flex items-center justify-between border rounded-xl px-4 py-3.5 cursor-pointer transition-all",
+                                isActive 
+                                  ? "border-[#6d5dfc]/40 bg-[#6d5dfc]/10 hover:bg-[#6d5dfc]/12" 
+                                  : "border-white/5 hover:border-white/10 bg-white/[0.01] hover:bg-white/[0.03]"
+                              )}
+                            >
+                              <div className="space-y-1">
+                                <p className="font-semibold text-white text-sm">{b.month}</p>
+                                <p className="text-xs text-slate-400">
+                                  {b.recipientsCount} Recipients • {b.totalAmount.toLocaleString()} USDC
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge 
+                                  variant={
+                                    b.status === "Paid" ? "success" : 
+                                    b.status === "Partially Paid" ? "warning" :
+                                    b.status === "Approved" ? "blue" : "secondary"
+                                  }
+                                >
+                                  {b.status}
+                                </Badge>
+                                <ArrowRight className={cn(
+                                  "h-4.5 w-4.5 transition-transform",
+                                  isActive ? "text-[#4f8cff] translate-x-0.5" : "text-slate-600"
+                                )} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
               </div>
-            )}
-          </div>
 
-        </div>
+              {/* Right Panel: Batch Detail & Breakdown */}
+              <div className="space-y-6">
+                {!activeBatch ? (
+                  <Card className="glass-card-component flex flex-col items-center justify-center text-center p-12 min-h-[450px]">
+                    <div className="h-14 w-14 rounded-2xl bg-white/5 border border-white/8 flex items-center justify-center text-slate-500 mb-4 animate-pulse">
+                      <CalendarDays className="h-6 w-6" />
+                    </div>
+                    <h3 className="text-md font-semibold text-slate-300">No active run selected</h3>
+                    <p className="text-xs text-slate-500 mt-2 max-w-sm">
+                      Select a run from the history or generate a new month run to inspect recipient breakdowns, audit totals, and initiate payments.
+                    </p>
+                  </Card>
+                ) : (
+                  <div className="space-y-6">
+                    
+                    {/* Review / Payout Workflow Card */}
+                    <div className="glow-border-shell">
+                      <Card className="border-0 bg-[#060f24]/90 p-1">
+                        <CardHeader className="pb-3">
+                          <div className="flex items-center gap-2.5">
+                            <CheckCircle2 className="h-5 w-5 text-[#4f8cff]" />
+                            <div>
+                              <CardTitle className="text-base text-white font-semibold">Payroll pipeline review</CardTitle>
+                              <CardDescription className="text-xs text-slate-400 mt-1">
+                                Approve or disburse payments for {activeBatch.month}.
+                              </CardDescription>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4 pt-1">
+                          
+                          {/* Workflow Details */}
+                          {activeBatch.status === "Draft" && (
+                            <div className="space-y-3">
+                              <p className="text-xs text-slate-300 leading-relaxed bg-white/5 border border-white/8 rounded-xl p-3.5">
+                                This batch is currently in <strong>Draft</strong> state. Verify that all salary details below are correct before submitting it for workspace review.
+                              </p>
+                              <Button 
+                                onClick={() => handleAdvanceStatus(activeBatch.id, "Pending")}
+                                className="w-full btn-electric gap-2"
+                              >
+                                <Play className="h-4 w-4" />
+                                Submit Batch for Approval
+                              </Button>
+                            </div>
+                          )}
+
+                          {activeBatch.status === "Pending" && (
+                            <div className="space-y-3">
+                              <p className="text-xs text-slate-300 leading-relaxed bg-white/5 border border-white/8 rounded-xl p-3.5">
+                                This batch is <strong>Pending Approval</strong>. Perform a final audit on salary amounts and wallet addresses.
+                              </p>
+                              <Button 
+                                onClick={() => handleAdvanceStatus(activeBatch.id, "Approved")}
+                                className="w-full btn-electric gap-2"
+                              >
+                                <ShieldCheck className="h-4.5 w-4.5" />
+                                Approve Payroll Run
+                              </Button>
+                            </div>
+                          )}
+
+                          {activeBatch.status === "Approved" && (
+                            <div className="space-y-3">
+                              <p className="text-xs text-slate-300 leading-relaxed bg-white/5 border border-white/8 rounded-xl p-3.5">
+                                This batch is **Approved**. You can now trigger the payout execution process to transfer USDC directly to contributor wallets.
+                              </p>
+                              <Button 
+                                onClick={() => setIsPayoutModalOpen(true)}
+                                className="w-full btn-electric gap-2"
+                              >
+                                <Send className="h-4 w-4" />
+                                Confirm Payout
+                              </Button>
+                            </div>
+                          )}
+
+                          {(activeBatch.status === "Paid" || activeBatch.status === "Partially Paid") && (
+                            <div className={cn(
+                              "space-y-3 border rounded-xl p-4",
+                              activeBatch.status === "Paid" 
+                                ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-400" 
+                                : "bg-amber-500/5 border-amber-500/10 text-amber-400"
+                            )}>
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck className="h-5 w-5 shrink-0" />
+                                <span className="text-sm font-semibold">
+                                  {activeBatch.status === "Paid" ? "Payroll Executed Successfully" : "Payroll Executed with Failures"}
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-300 leading-relaxed mt-1">
+                                Disbursement loop completed on {activeBatch.executedAt}. Payouts were signed and sent directly from the connected wallet.
+                              </p>
+                            </div>
+                          )}
+
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Approval Timeline */}
+                    <Card className="glass-card-component">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-sm font-semibold text-white">Approval timeline</CardTitle>
+                      </CardHeader>
+                      <CardContent className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-white/5">
+                        
+                        {/* Step 1: Draft */}
+                        <div className="relative flex gap-3 text-xs">
+                          <div className="absolute -left-5 mt-0.5 h-3 w-3 rounded-full border border-[#6d5dfc] bg-[#6d5dfc]/20 flex items-center justify-center shadow-[0_0_8px_rgba(109,93,252,0.4)]" />
+                          <div className="space-y-1">
+                            <p className="font-semibold text-white">Batch Compiled (Draft)</p>
+                            <p className="text-[10px] text-slate-400">Roster snapshot locked</p>
+                            <p className="text-[10px] text-[#4f8cff] font-mono">{activeBatch.createdAt}</p>
+                          </div>
+                        </div>
+
+                        {/* Step 2: Submitted */}
+                        <div className="relative flex gap-3 text-xs">
+                          {activeBatch.submittedAt ? (
+                            <>
+                              <div className="absolute -left-5 mt-0.5 h-3 w-3 rounded-full border border-[#6d5dfc] bg-[#6d5dfc]/20 flex items-center justify-center shadow-[0_0_8px_rgba(109,93,252,0.4)]" />
+                              <div className="space-y-1">
+                                <p className="font-semibold text-white">Submitted for Review</p>
+                                <p className="text-[10px] text-slate-400">Roster sent to workspace owner</p>
+                                <p className="text-[10px] text-[#4f8cff] font-mono">{activeBatch.submittedAt}</p>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="absolute -left-5 mt-0.5 h-3 w-3 rounded-full border border-white/10 bg-slate-900" />
+                              <div className="space-y-1 opacity-45">
+                                <p className="font-semibold text-slate-400">Submitted for Review</p>
+                                <p className="text-[10px] text-slate-500">Awaiting founder submission</p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Step 3: Approved */}
+                        <div className="relative flex gap-3 text-xs">
+                          {activeBatch.approvedAt ? (
+                            <>
+                              <div className="absolute -left-5 mt-0.5 h-3 w-3 rounded-full border border-emerald-500 bg-emerald-500/20 flex items-center justify-center shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
+                              <div className="space-y-1">
+                                <p className="font-semibold text-emerald-400">Roster Approved</p>
+                                <p className="text-[10px] text-slate-400">Ready for wallet payout stage</p>
+                                <p className="text-[10px] text-emerald-400 font-mono">{activeBatch.approvedAt}</p>
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div className="absolute -left-5 mt-0.5 h-3 w-3 rounded-full border border-white/10 bg-slate-900" />
+                              <div className="space-y-1 opacity-45">
+                                <p className="font-semibold text-slate-400">Roster Approved</p>
+                                <p className="text-[10px] text-slate-500">Pending final authorization</p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                      </CardContent>
+                    </Card>
+
+                    {/* Batch breakdown table */}
+                    <Card className="glass-card-component">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-semibold text-white">Contributor breakdown</CardTitle>
+                        <CardDescription className="text-xs text-slate-500">
+                          Roster configuration snapshot for {activeBatch.month}.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="pt-2">
+                        <div className="overflow-x-auto">
+                          <div className="min-w-[500px] space-y-1.5">
+                            
+                            {/* Headers */}
+                            <div className="grid grid-cols-[1.5fr_1.5fr_1fr_1fr] bg-white/5 px-4 py-2 text-xs font-semibold text-slate-400 rounded-lg">
+                              <span>CONTRIBUTOR / ROLE</span>
+                              <span>WALLET</span>
+                              <span>STATUS</span>
+                              <span className="text-right">SALARY AMOUNT</span>
+                            </div>
+
+                            {/* Rows */}
+                            {activeBatch.contributors.map(c => (
+                              <div 
+                                key={c.id} 
+                                className="grid grid-cols-[1.5fr_1.5fr_1fr_1fr] items-center border border-white/5 px-4 py-2.5 text-xs text-slate-300 rounded-lg"
+                              >
+                                <div className="truncate pr-2">
+                                  <p className="font-semibold text-white truncate">{c.fullName}</p>
+                                  <p className="text-[10px] text-slate-400 truncate mt-0.5">{c.role}</p>
+                                  {c.frequency && c.scheduledDate && (
+                                    <p className="text-[9px] text-[#4f8cff] truncate mt-0.5 font-medium">
+                                      {c.frequency} (Due {c.scheduledDate})
+                                    </p>
+                                  )}
+                                </div>
+                                
+                                <div className="flex items-center gap-1.5 font-mono text-slate-400">
+                                  <span>{shortenAddress(c.walletAddress)}</span>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 px-1 hover:bg-white/10"
+                                    onClick={() => handleCopy(c.id, c.walletAddress)}
+                                    title="Copy address"
+                                  >
+                                    {copiedId === c.id ? (
+                                      <Check className="h-3 w-3 text-emerald-400" />
+                                    ) : (
+                                      <Copy className="h-3 w-3 text-slate-500" />
+                                    )}
+                                  </Button>
+                                </div>
+
+                                <div>
+                                  {c.status === "Paid" && c.txHash ? (
+                                    <a 
+                                      href={`https://testnet.arcscan.app/tx/${c.txHash}`} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer"
+                                      className="text-emerald-400 flex items-center gap-1 hover:underline font-semibold"
+                                    >
+                                      Mined
+                                      <ExternalLink className="h-3 w-3 shrink-0" />
+                                    </a>
+                                  ) : c.status === "Failed" ? (
+                                    <span className="text-rose-400 font-semibold" title={c.errorMsg}>Failed</span>
+                                  ) : c.status === "Pending" ? (
+                                    <span className="text-amber-400 font-semibold flex items-center gap-1">
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                      Mining
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500">Unpaid</span>
+                                  )}
+                                </div>
+
+                                <div className="text-right font-semibold text-white">
+                                  {c.salaryAmount.toLocaleString()} USDC
+                                </div>
+                              </div>
+                            ))}
+
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </>
+        )}
 
         {/* Payout Execution & Review Modal */}
         {isPayoutModalOpen && activeBatch && (

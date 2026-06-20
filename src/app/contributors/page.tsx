@@ -13,7 +13,8 @@ import {
   ExternalLink,
   X,
   DollarSign,
-  AlertTriangle
+  AlertTriangle,
+  Lock
 } from "lucide-react";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -21,7 +22,8 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { shortenAddress } from "@/components/wallet/use-arc-wallet";
+import { shortenAddress, useArcWallet } from "@/components/wallet/use-arc-wallet";
+import { ConnectWalletButton } from "@/components/wallet/connect-wallet-button";
 
 type Contributor = {
   id: string;
@@ -41,7 +43,7 @@ const DEFAULT_CONTRIBUTORS: Contributor[] = [
     fullName: "Maya Chen",
     walletAddress: "0x7a8df39c1234567890abcdef1234567890abcdef",
     role: "Lead Protocol Engineer",
-    salaryAmount: 6500,
+    salaryAmount: 10,
     status: "Active",
     startDate: "2026-06-01",
     frequency: "Monthly",
@@ -52,7 +54,7 @@ const DEFAULT_CONTRIBUTORS: Contributor[] = [
     fullName: "Luis Park",
     walletAddress: "0xbc8a892b1234567890abcdef1234567890abcdef",
     role: "Frontend Engineer",
-    salaryAmount: 4800,
+    salaryAmount: 10,
     status: "Active",
     startDate: "2026-06-01",
     frequency: "Monthly",
@@ -63,7 +65,7 @@ const DEFAULT_CONTRIBUTORS: Contributor[] = [
     fullName: "Ari James",
     walletAddress: "0x4e23761a1234567890abcdef1234567890abcdef",
     role: "Product Designer",
-    salaryAmount: 5200,
+    salaryAmount: 10,
     status: "Active",
     startDate: "2026-06-01",
     frequency: "Weekly",
@@ -74,7 +76,7 @@ const DEFAULT_CONTRIBUTORS: Contributor[] = [
     fullName: "Nora Singh",
     walletAddress: "0x9f1a238b1234567890abcdef1234567890abcdef",
     role: "DevOps Engineer",
-    salaryAmount: 5800,
+    salaryAmount: 10,
     status: "Suspended",
     startDate: "2026-06-01",
     frequency: "Monthly",
@@ -98,6 +100,7 @@ export default function ContributorsPage() {
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [storageError, setStorageError] = useState(false);
+  const { isConnected } = useArcWallet();
   
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -121,11 +124,25 @@ export default function ContributorsPage() {
         setContributors([]);
         setStorageError(true);
       }
-    } else {
-      setContributors(DEFAULT_CONTRIBUTORS);
-      localStorage.setItem("arc_contributors", JSON.stringify(DEFAULT_CONTRIBUTORS));
     }
   }, []);
+
+  useEffect(() => {
+    if (isConnected && mounted) {
+      const stored = localStorage.getItem("arc_contributors");
+      if (!stored) {
+        setContributors(DEFAULT_CONTRIBUTORS);
+        localStorage.setItem("arc_contributors", JSON.stringify(DEFAULT_CONTRIBUTORS));
+      } else {
+        try {
+          setContributors(JSON.parse(stored));
+        } catch {
+          setContributors([]);
+          setStorageError(true);
+        }
+      }
+    }
+  }, [isConnected, mounted]);
 
   const saveRoster = (newRoster: Contributor[]) => {
     setContributors(newRoster);
@@ -288,10 +305,12 @@ export default function ContributorsPage() {
             title="Workspace Roster"
             description="Manage contributor profiles, wallet addresses, and monthly compensations. Setup direct payroll pipelines."
             action={
-              <Button onClick={handleOpenAddModal} className="btn-electric gap-2">
-                <Plus className="h-4.5 w-4.5" />
-                Add Contributor
-              </Button>
+              isConnected && (
+                <Button onClick={handleOpenAddModal} className="btn-electric gap-2">
+                  <Plus className="h-4.5 w-4.5" />
+                  Add Contributor
+                </Button>
+              )
             }
           />
         </div>
@@ -308,132 +327,149 @@ export default function ContributorsPage() {
           </div>
         )}
 
-        {/* Directory Card */}
-        <Card className="relative z-10 glass-card-component">
-          <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between md:space-y-0 pb-4">
-            <CardTitle>Team roster</CardTitle>
-            <div className="relative w-full md:w-72">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
-              <input
-                type="text"
-                placeholder="Search contributors..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm bg-white/5 border border-white/8 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-[#6d5dfc] focus:ring-1 focus:ring-[#6d5dfc] transition-all"
-              />
-            </div>
-          </CardHeader>
-          <CardContent className="pt-2">
-            {filteredContributors.length === 0 ? (
-              <div className="text-center py-12 border border-white/5 rounded-2xl bg-white/[0.01]">
-                <UserRoundCheck className="h-10 w-10 text-slate-600 mx-auto mb-3" />
-                <p className="text-sm font-semibold text-slate-300">No contributors found</p>
-                <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                  Try adjusting your search criteria or add a new team member to the directory.
-                </p>
+        {!isConnected ? (
+          <Card className="relative z-10 glass-card-component">
+            <CardContent className="py-16 text-center">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#6d5dfc]/10 border border-[#6d5dfc]/15 text-[#4f8cff] mx-auto mb-4 animate-pulse">
+                <Lock className="h-6 w-6" />
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <div className="min-w-[750px] space-y-2">
-                  {/* Table Headers */}
-                  <div className="grid grid-cols-[1.2fr_1.5fr_1fr_0.8fr_0.7fr] bg-white/5 px-4 py-2.5 text-xs font-semibold text-slate-400 rounded-lg">
-                    <span>CONTRIBUTOR / ROLE</span>
-                    <span>WALLET ADDRESS</span>
-                    <span>MONTHLY COMP</span>
-                    <span>STATUS</span>
-                    <span className="text-right">ACTIONS</span>
-                  </div>
+              <p className="text-base font-semibold text-slate-200">Connect your wallet to view and manage contributors.</p>
+              <p className="text-xs text-slate-500 mt-1 mb-6 max-w-xs mx-auto">
+                Please connect your wallet to access the workspace roster and salary configurations.
+              </p>
+              <div className="flex justify-center">
+                <ConnectWalletButton />
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          /* Directory Card */
+          <Card className="relative z-10 glass-card-component">
+            <CardHeader className="gap-4 md:flex-row md:items-center md:justify-between md:space-y-0 pb-4">
+              <CardTitle>Team roster</CardTitle>
+              <div className="relative w-full md:w-72">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+                <input
+                  type="text"
+                  placeholder="Search contributors..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-sm bg-white/5 border border-white/8 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-[#6d5dfc] focus:ring-1 focus:ring-[#6d5dfc] transition-all"
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="pt-2">
+              {filteredContributors.length === 0 ? (
+                <div className="text-center py-12 border border-white/5 rounded-2xl bg-white/[0.01]">
+                  <UserRoundCheck className="h-10 w-10 text-slate-600 mx-auto mb-3" />
+                  <p className="text-sm font-semibold text-slate-300">No contributors found</p>
+                  <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+                    Try adjusting your search criteria or add a new team member to the directory.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <div className="min-w-[750px] space-y-2">
+                    {/* Table Headers */}
+                    <div className="grid grid-cols-[1.2fr_1.5fr_1fr_0.8fr_0.7fr] bg-white/5 px-4 py-2.5 text-xs font-semibold text-slate-400 rounded-lg">
+                      <span>CONTRIBUTOR / ROLE</span>
+                      <span>WALLET ADDRESS</span>
+                      <span>MONTHLY COMP</span>
+                      <span>STATUS</span>
+                      <span className="text-right">ACTIONS</span>
+                    </div>
 
-                  {/* Roster Rows */}
-                  {filteredContributors.map((c) => (
-                    <div 
-                      key={c.id} 
-                      className="grid grid-cols-[1.2fr_1.5fr_1fr_0.8fr_0.7fr] items-center border border-white/5 px-4 py-3.5 text-sm text-white hover:bg-white/[0.02] rounded-xl transition-all"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#6d5dfc]/10 border border-[#6d5dfc]/15 text-[#4f8cff] shrink-0">
-                          <UserRoundCheck className="h-4.5 w-4.5" />
+                    {/* Roster Rows */}
+                    {filteredContributors.map((c) => (
+                      <div 
+                        key={c.id} 
+                        className="grid grid-cols-[1.2fr_1.5fr_1fr_0.8fr_0.7fr] items-center border border-white/5 px-4 py-3.5 text-sm text-white hover:bg-white/[0.02] rounded-xl transition-all"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#6d5dfc]/10 border border-[#6d5dfc]/15 text-[#4f8cff] shrink-0">
+                            <UserRoundCheck className="h-4.5 w-4.5" />
+                          </div>
+                          <div className="truncate">
+                            <p className="font-semibold text-white truncate">{c.fullName}</p>
+                            <p className="text-xs text-slate-400 truncate mt-0.5">{c.role}</p>
+                            <p className="text-[10px] text-[#4f8cff] mt-0.5 font-medium">
+                              Starts {c.startDate || "2026-06-01"} · {c.frequency === "Weekly" ? `Weekly on ${c.payoutDay}` : `Monthly on Day ${c.payoutDay}`}
+                            </p>
+                          </div>
                         </div>
-                        <div className="truncate">
-                          <p className="font-semibold text-white truncate">{c.fullName}</p>
-                          <p className="text-xs text-slate-400 truncate mt-0.5">{c.role}</p>
-                          <p className="text-[10px] text-[#4f8cff] mt-0.5 font-medium">
-                            Starts {c.startDate || "2026-06-01"} · {c.frequency === "Weekly" ? `Weekly on ${c.payoutDay}` : `Monthly on Day ${c.payoutDay}`}
-                          </p>
-                        </div>
-                      </div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-slate-300">{shortenAddress(c.walletAddress)}</span>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 px-2 hover:bg-white/10"
-                            onClick={() => handleCopy(c.id, c.walletAddress)}
-                            title="Copy address"
-                          >
-                            {copiedId === c.id ? (
-                              <Check className="h-3.5 w-3.5 text-emerald-400" />
-                            ) : (
-                              <Copy className="h-3.5 w-3.5 text-slate-500" />
-                            )}
-                          </Button>
-                          <a
-                            href={`https://testnet.arcscan.app/address/${c.walletAddress}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs text-slate-300">{shortenAddress(c.walletAddress)}</span>
+                          <div className="flex items-center gap-1">
                             <Button
                               size="sm"
                               variant="ghost"
                               className="h-7 px-2 hover:bg-white/10"
-                              title="View on ArcScan"
+                              onClick={() => handleCopy(c.id, c.walletAddress)}
+                              title="Copy address"
                             >
-                              <ExternalLink className="h-3.5 w-3.5 text-slate-500" />
+                              {copiedId === c.id ? (
+                                <Check className="h-3.5 w-3.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5 text-slate-500" />
+                              )}
                             </Button>
-                          </a>
+                            <a
+                              href={`https://testnet.arcscan.app/address/${c.walletAddress}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 px-2 hover:bg-white/10"
+                                title="View on ArcScan"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5 text-slate-500" />
+                              </Button>
+                            </a>
+                          </div>
+                        </div>
+
+                        <div className="font-semibold text-white flex items-center gap-0.5">
+                          <DollarSign className="h-4 w-4 text-emerald-400 shrink-0" />
+                          {c.salaryAmount.toLocaleString()} / mo
+                        </div>
+
+                        <div>
+                          <Badge variant={c.status === "Active" ? "success" : "warning"}>
+                            {c.status}
+                          </Badge>
+                        </div>
+
+                        <div className="flex justify-end gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 hover:bg-white/10 text-slate-400 hover:text-white"
+                            onClick={() => handleOpenEditModal(c)}
+                            title="Edit contributor"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-8 w-8 p-0 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400"
+                            onClick={() => setDeleteConfirmId(c.id)}
+                            title="Remove contributor"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-
-                      <div className="font-semibold text-white flex items-center gap-0.5">
-                        <DollarSign className="h-4 w-4 text-emerald-400 shrink-0" />
-                        {c.salaryAmount.toLocaleString()} / mo
-                      </div>
-
-                      <div>
-                        <Badge variant={c.status === "Active" ? "success" : "warning"}>
-                          {c.status}
-                        </Badge>
-                      </div>
-
-                      <div className="flex justify-end gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 w-8 p-0 hover:bg-white/10 text-slate-400 hover:text-white"
-                          onClick={() => handleOpenEditModal(c)}
-                          title="Edit contributor"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 w-8 p-0 hover:bg-rose-500/10 text-slate-400 hover:text-rose-400"
-                          onClick={() => setDeleteConfirmId(c.id)}
-                          title="Remove contributor"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Custom Edit/Add Modal Overlay */}
         {isModalOpen && (

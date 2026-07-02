@@ -73,6 +73,8 @@ type PayrollBatch = {
 };
 
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
+const PAYROLL_ADDRESS = "0x764e9e46e8595D80E7C2000e446CeF2B6848B2Ac";
+
 const ERC20_ABI = [
   {
     name: "balanceOf",
@@ -81,18 +83,38 @@ const ERC20_ABI = [
     inputs: [{ name: "account", type: "address" }],
     outputs: [{ name: "balance", type: "uint256" }],
   },
-] as const;
-
-const ERC20_TRANSFER_ABI = [
   {
-    name: "transfer",
+    name: "allowance",
+    type: "function",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" }
+    ],
+    outputs: [{ name: "remaining", type: "uint256" }],
+  },
+  {
+    name: "approve",
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
-      { name: "recipient", type: "address" },
-      { name: "amount", type: "uint256" }
+      { name: "spender", type: "address" },
+      { name: "value", type: "uint256" }
     ],
-    outputs: [{ name: "success", type: "bool" }]
+    outputs: [{ name: "success", type: "bool" }],
+  }
+] as const;
+
+const PAYROLL_ABI = [
+  {
+    name: "batchPayEmployees",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "recipients", type: "address[]" },
+      { name: "amounts", type: "uint256[]" }
+    ],
+    outputs: []
   }
 ] as const;
 
@@ -171,6 +193,16 @@ export default function PayrollPage() {
     abi: ERC20_ABI,
     functionName: "balanceOf",
     args: isArcTestnet && address ? [address] : undefined,
+    query: {
+      enabled: !!isArcTestnet && !!address,
+    }
+  });
+
+  const { data: usdcAllowance, refetch: refetchAllowance } = useReadContract({
+    address: USDC_ADDRESS,
+    abi: ERC20_ABI,
+    functionName: "allowance",
+    args: isArcTestnet && address ? [address, PAYROLL_ADDRESS] : undefined,
     query: {
       enabled: !!isArcTestnet && !!address,
     }
@@ -486,7 +518,7 @@ export default function PayrollPage() {
     setSuccess(`Payroll batch advanced to ${nextStatus}.`);
   };
 
-  // Sequential USDC Payout loop
+  // Batch USDC Payout through ArcPayroll contract
   const handleExecutePayout = async () => {
     const activeBatch = batches.find(b => b.id === activeBatchId);
     if (!activeBatch || !address) return;
@@ -504,107 +536,114 @@ export default function PayrollPage() {
       minute: "2-digit"
     });
 
-    const updatedContributors = activeBatch.contributors.map(c => ({ ...c }));
-    let allSucceeded = true;
-    let anySucceeded = false;
+    const updatedContributors = activeBatch.contributors.map(c => ({ 
+      ...c, 
+      status: "Pending" as "Awaiting" | "Pending" | "Paid" | "Failed",
+      errorMsg: undefined as string | undefined,
+      txHash: undefined as string | undefined
+    }));
+    
+    // Set all contributors status to Pending initially
+    const tempBatches = batches.map(b => 
+      b.id === activeBatch.id ? { ...b, contributors: [...updatedContributors] } : b
+    );
+    setBatches(tempBatches);
 
-    for (let i = 0; i < updatedContributors.length; i++) {
-      const c = updatedContributors[i];
-      setCurrentExecutionIndex(i);
+    try {
+      const totalAmountUnits = parseUnits(activeBatch.totalAmount.toString(), 6);
 
-      // Set status to Pending
-      updatedContributors[i].status = "Pending";
+      // Step 1: Check and approve USDC allowance
+      const currentAllowance = usdcAllowance !== undefined ? (usdcAllowance as bigint) : BigInt(0);
       
-      // Update state in real-time for visual tracking
-      const tempBatches = batches.map(b => 
-        b.id === activeBatch.id ? { ...b, contributors: [...updatedContributors] } : b
-      );
-      setBatches(tempBatches);
-
-      try {
-        // Use parseUnits to scale salary amounts to 6 decimals
-        const amountUnits = parseUnits(c.salaryAmount.toString(), 6);
-
-        // Execute ERC20 transfer directly from connected wallet
-        const hash = await writeContractAsync({
+      if (currentAllowance < totalAmountUnits) {
+        setCurrentExecutionIndex(-2); // Display: "Approving USDC allowance..."
+        
+        const approveHash = await writeContractAsync({
           address: USDC_ADDRESS,
-          abi: ERC20_TRANSFER_ABI,
-          functionName: "transfer",
-          args: [c.walletAddress as `0x${string}`, amountUnits],
+          abi: ERC20_ABI,
+          functionName: "approve",
+          args: [PAYROLL_ADDRESS as `0x${string}`, totalAmountUnits],
         });
 
-        // Wait for mining confirmation on-chain
         if (publicClient) {
-          await publicClient.waitForTransactionReceipt({ hash });
+          await publicClient.waitForTransactionReceipt({ hash: approveHash });
         }
-
-        // Mark recipient as Paid
-        updatedContributors[i].status = "Paid";
-        updatedContributors[i].txHash = hash;
-        anySucceeded = true;
-      } catch (error) {
-        allSucceeded = false;
-        const err = error as { name?: string; code?: number; message?: string; shortMessage?: string };
-        const msg = err.shortMessage || err.message || "Transaction failed";
-        updatedContributors[i].status = "Failed";
-        updatedContributors[i].errorMsg = msg;
-
-        const isUserRejection = 
-          err.name === "UserRejectedRequestError" || 
-          err.code === 4001 || 
-          /user rejected/i.test(err.message || "") ||
-          /user rejected/i.test(err.shortMessage || "");
-
-        if (isUserRejection) {
-          updatedContributors[i].errorMsg = "User rejected signature request";
-          setPayoutError("Execution cancelled by user.");
-          
-          for (let j = i + 1; j < updatedContributors.length; j++) {
-            updatedContributors[j].status = "Awaiting";
-          }
-          break;
+        
+        if (refetchAllowance) {
+          await refetchAllowance();
         }
       }
 
-      // Update state in real-time
-      const tempBatchesFinal = batches.map(b => 
-        b.id === activeBatch.id ? { ...b, contributors: [...updatedContributors] } : b
+      // Step 2: Execute batch payroll payment
+      setCurrentExecutionIndex(-3); // Display: "Executing batch payroll..."
+
+      const recipients = updatedContributors.map(c => c.walletAddress as `0x${string}`);
+      const amounts = updatedContributors.map(c => parseUnits(c.salaryAmount.toString(), 6));
+
+      const batchHash = await writeContractAsync({
+        address: PAYROLL_ADDRESS as `0x${string}`,
+        abi: PAYROLL_ABI,
+        functionName: "batchPayEmployees",
+        args: [recipients, amounts],
+      });
+
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash: batchHash });
+      }
+
+      // Success: Mark all as Paid
+      for (let i = 0; i < updatedContributors.length; i++) {
+        updatedContributors[i].status = "Paid";
+        updatedContributors[i].txHash = batchHash;
+      }
+
+      const finalBatchesList = batches.map(b => 
+        b.id === activeBatch.id ? { 
+          ...b, 
+          status: "Paid" as const, 
+          executedAt: timestamp,
+          contributors: updatedContributors 
+        } : b
       );
-      setBatches(tempBatchesFinal);
-    }
 
-    setIsExecuting(false);
-    setCurrentExecutionIndex(-1);
-
-    // Compute final batch status
-    let finalStatus: "Paid" | "Partially Paid" | "Approved" = "Approved";
-    if (allSucceeded) {
-      finalStatus = "Paid";
-    } else if (anySucceeded) {
-      finalStatus = "Partially Paid";
-    } else {
-      finalStatus = "Approved";
-      setPayoutError("All transactions failed. The payroll status remains Approved.");
-    }
-
-    const finalBatchesList = batches.map(b => 
-      b.id === activeBatch.id ? { 
-        ...b, 
-        status: finalStatus, 
-        executedAt: finalStatus !== "Approved" ? timestamp : undefined,
-        contributors: updatedContributors 
-      } : b
-    );
-
-    saveBatches(finalBatchesList);
-    refetchUsdc(); // Refresh active USDC balance after execution completes
-
-    if (finalStatus === "Paid") {
+      saveBatches(finalBatchesList);
       setSuccess("Payroll batch executed successfully! All payments transferred.");
       setIsPayoutModalOpen(false);
-    } else if (finalStatus === "Partially Paid") {
-      setError("Payroll batch completed with errors. Some payouts failed.");
-      setIsPayoutModalOpen(false);
+
+    } catch (error) {
+      const err = error as { name?: string; code?: number; message?: string; shortMessage?: string };
+      const msg = err.shortMessage || err.message || "Transaction failed";
+      
+      const isUserRejection = 
+        err.name === "UserRejectedRequestError" || 
+        err.code === 4001 || 
+        /user rejected/i.test(err.message || "") ||
+        /user rejected/i.test(err.shortMessage || "");
+
+      const errorText = isUserRejection ? "User rejected signature request" : msg;
+
+      for (let i = 0; i < updatedContributors.length; i++) {
+        updatedContributors[i].status = "Failed";
+        updatedContributors[i].errorMsg = errorText;
+      }
+
+      const finalBatchesList = batches.map(b => 
+        b.id === activeBatch.id ? { 
+          ...b, 
+          status: "Approved" as const, 
+          contributors: updatedContributors 
+        } : b
+      );
+
+      saveBatches(finalBatchesList);
+      setPayoutError(isUserRejection ? "Execution cancelled by user." : `Payroll execution failed: ${msg}`);
+    } finally {
+      setIsExecuting(false);
+      setCurrentExecutionIndex(-1);
+      refetchUsdc();
+      if (refetchAllowance) {
+        refetchAllowance();
+      }
     }
   };
 
@@ -1252,7 +1291,13 @@ export default function PayrollPage() {
                       <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
                         <Loader2 className="h-4 w-4 animate-spin text-[#4f8cff]" />
                         <span>
-                          Executing payouts sequentially ({currentExecutionIndex + 1} of {activeBatch.contributors.length}). Do not close...
+                          {currentExecutionIndex === -2 ? (
+                            "Approving USDC allowance... Please confirm in wallet."
+                          ) : currentExecutionIndex === -3 ? (
+                            "Executing batch payroll... Please confirm in wallet."
+                          ) : (
+                            `Executing payouts sequentially (${currentExecutionIndex + 1} of ${activeBatch.contributors.length}). Do not close...`
+                          )}
                         </span>
                       </div>
                     )}

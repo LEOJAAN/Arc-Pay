@@ -18,6 +18,8 @@ contract ArcPayroll is Ownable, ReentrancyGuard, Pausable {
 
     event SalaryPaid(address indexed employee, uint256 amount);
     event BatchPayrollExecuted(address indexed executor, uint256 totalAmount, uint256 employeeCount);
+    event DebugBeforeTransfer(address employee, uint256 amount);
+    event DebugAfterTransfer(address employee, uint256 amount);
 
     constructor(address usdcTokenAddress) Ownable(msg.sender) {
         require(usdcTokenAddress != address(0), "ArcPayroll: USDC token address cannot be zero");
@@ -48,8 +50,12 @@ contract ArcPayroll is Ownable, ReentrancyGuard, Pausable {
 
             totalAmount += amount;
 
+            emit DebugBeforeTransfer(employee, amount);
+
             // Transfer tokens from the owner (msg.sender) to the employee
             _usdcToken.safeTransferFrom(msg.sender, employee, amount);
+
+            emit DebugAfterTransfer(employee, amount);
 
             emit SalaryPaid(employee, amount);
         }

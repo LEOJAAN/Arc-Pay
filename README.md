@@ -66,7 +66,7 @@ npx hardhat verify --network arcTestnet <DEPLOYED_CONTRACT_ADDRESS> "0x360000000
 ### 5. Update Frontend Address
 The contract is deployed and integrated with the frontend at:
 ```typescript
-const PAYROLL_ADDRESS = "0x5644da676975fd2c668554d9e3828afb3e237bb8";
+const PAYROLL_ADDRESS = "0x24e9cbc99ab4d696f7ad9ffa42d15dc84ce5a006";
 ```
 
  #   A r c - P a y  

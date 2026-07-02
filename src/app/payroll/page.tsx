@@ -74,7 +74,7 @@ type PayrollBatch = {
 };
 
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000" as Address;
-const PAYROLL_ADDRESS = "0x5644da676975fd2c668554d9e3828afb3e237bb8" as Address;
+const PAYROLL_ADDRESS = "0x24e9cbc99ab4d696f7ad9ffa42d15dc84ce5a006" as Address;
 
 const ERC20_ABI = [
   {

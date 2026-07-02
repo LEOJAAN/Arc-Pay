@@ -73,7 +73,7 @@ type PayrollBatch = {
 };
 
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
-const PAYROLL_ADDRESS = "0x5644dAd76975ED2C66855Ad9e3828aFB3e237BB8";
+const PAYROLL_ADDRESS = "0x5644dA676975FD2C66855Ad9e3828aFB3e237BB8";
 
 const ERC20_ABI = [
   {
@@ -163,7 +163,7 @@ const generateWeeklyPeriods = (year: number) => {
 
 export default function PayrollPage() {
   const [mounted, setMounted] = useState(false);
-  const { isConnected, address, isArcTestnet, switchToArcTestnet, isSwitching } = useArcWallet();
+  const { isConnected, address, isArcTestnet, switchToArcTestnet, isSwitching, chainId } = useArcWallet();
   const [storageError, setStorageError] = useState(false);
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [batches, setBatches] = useState<PayrollBatch[]>([]);
@@ -209,7 +209,7 @@ export default function PayrollPage() {
   });
 
   const { writeContractAsync } = useWriteContract();
-  const publicClient = usePublicClient();
+  const publicClient = usePublicClient({ chainId: 5042002 });
 
   useEffect(() => {
     setMounted(true);
@@ -526,6 +526,20 @@ export default function PayrollPage() {
     setError(null);
     setSuccess(null);
     setPayoutError(null);
+
+    // Verify network is Arc Testnet before starting execution
+    if (chainId !== 5042002) {
+      setPayoutError("Please switch to Arc Testnet to execute payroll.");
+      if (switchToArcTestnet) {
+        try {
+          await switchToArcTestnet();
+        } catch (err) {
+          console.error("Failed to switch network:", err);
+        }
+      }
+      return;
+    }
+
     setIsExecuting(true);
 
     const timestamp = new Date().toLocaleDateString("en-US", {
@@ -563,6 +577,7 @@ export default function PayrollPage() {
           abi: ERC20_ABI,
           functionName: "approve",
           args: [PAYROLL_ADDRESS as `0x${string}`, totalAmountUnits],
+          chainId: 5042002,
         });
 
         if (publicClient) {
@@ -585,6 +600,7 @@ export default function PayrollPage() {
         abi: PAYROLL_ABI,
         functionName: "batchPayEmployees",
         args: [recipients, amounts],
+        chainId: 5042002,
       });
 
       if (publicClient) {

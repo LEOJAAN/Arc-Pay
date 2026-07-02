@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useReadContract, useWriteContract, usePublicClient } from "wagmi";
 import { formatUnits, parseUnits } from "viem";
+import type { Address } from "viem";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { PageHeader } from "@/components/layout/page-header";
@@ -72,8 +73,8 @@ type PayrollBatch = {
   }[];
 };
 
-const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
-const PAYROLL_ADDRESS = "0x5644dA676975FD2C668554d9e3828aFB3e237BB8";
+const USDC_ADDRESS = "0x3600000000000000000000000000000000000000" as Address;
+const PAYROLL_ADDRESS = "0x5644dA676975FD2C668554d9e3828aFB3e237BB8" as Address;
 
 const ERC20_ABI = [
   {
@@ -576,7 +577,7 @@ export default function PayrollPage() {
           address: USDC_ADDRESS,
           abi: ERC20_ABI,
           functionName: "approve",
-          args: [PAYROLL_ADDRESS as `0x${string}`, totalAmountUnits],
+          args: [PAYROLL_ADDRESS, totalAmountUnits],
           chainId: 5042002,
         });
 
@@ -596,7 +597,7 @@ export default function PayrollPage() {
       const amounts = updatedContributors.map(c => parseUnits(c.salaryAmount.toString(), 6));
 
       const batchHash = await writeContractAsync({
-        address: PAYROLL_ADDRESS as `0x${string}`,
+        address: PAYROLL_ADDRESS,
         abi: PAYROLL_ABI,
         functionName: "batchPayEmployees",
         args: [recipients, amounts],

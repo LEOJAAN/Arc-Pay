@@ -22,7 +22,7 @@ export function useArcWallet() {
   const { address, connector, isConnected, isConnecting, isReconnecting } = useAccount();
   const { connectors, connect, error: connectError, isPending } = useConnect();
   const { disconnect } = useDisconnect();
-  const { switchChain, isPending: isSwitching } = useSwitchChain();
+  const { switchChain, switchChainAsync, isPending: isSwitching } = useSwitchChain();
 
   const availableConnector = connectors[0];
   
@@ -55,6 +55,8 @@ export function useArcWallet() {
     isSwitching,
     isUnsupportedNetwork,
     switchToArcTestnet: () => switchChain({ chainId: arcTestnet.id }),
+    switchToArcTestnetAsync: () => switchChainAsync({ chainId: arcTestnet.id }),
+    switchChainAsync,
   };
 }
 

@@ -47,14 +47,57 @@ export const arbitrumSepolia = defineChain({
   },
   testnet: true,
 });
+export const mainnet = defineChain({
+  id: 1,
+  name: "Ethereum",
+  nativeCurrency: {
+    name: "Ether",
+    symbol: "ETH",
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: {
+      http: ["https://cloudflare-eth.com"],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: "Etherscan",
+      url: "https://etherscan.io",
+    },
+  },
+});
+
+export const base = defineChain({
+  id: 8453,
+  name: "Base",
+  nativeCurrency: {
+    name: "Ether",
+    symbol: "ETH",
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: {
+      http: ["https://mainnet.base.org"],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: "Basescan",
+      url: "https://basescan.org",
+    },
+  },
+});
 
 export const wagmiConfig = createConfig({
-  chains: [arcTestnet, baseSepolia, arbitrumSepolia],
+  chains: [arcTestnet, baseSepolia, arbitrumSepolia, mainnet, base],
   connectors: [injected()],
   transports: {
     [arcTestnet.id]: http(arcTestnet.rpcUrls.default.http[0]),
     [baseSepolia.id]: http(baseSepolia.rpcUrls.default.http[0]),
     [arbitrumSepolia.id]: http(arbitrumSepolia.rpcUrls.default.http[0]),
+    [mainnet.id]: http(mainnet.rpcUrls.default.http[0]),
+    [base.id]: http(base.rpcUrls.default.http[0]),
   },
   ssr: true,
 });

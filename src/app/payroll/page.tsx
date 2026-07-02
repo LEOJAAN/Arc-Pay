@@ -164,7 +164,7 @@ const generateWeeklyPeriods = (year: number) => {
 
 export default function PayrollPage() {
   const [mounted, setMounted] = useState(false);
-  const { isConnected, address, isArcTestnet, switchToArcTestnet, isSwitching, chainId } = useArcWallet();
+  const { isConnected, address, isArcTestnet, switchToArcTestnet, switchToArcTestnetAsync, isSwitching, chainId } = useArcWallet();
   const [storageError, setStorageError] = useState(false);
   const [contributors, setContributors] = useState<Contributor[]>([]);
   const [batches, setBatches] = useState<PayrollBatch[]>([]);
@@ -567,15 +567,21 @@ export default function PayrollPage() {
 
     // Verify network is Arc Testnet before starting execution
     if (chainId !== 5042002) {
-      setPayoutError("Please switch to Arc Testnet to execute payroll.");
-      if (switchToArcTestnet) {
+      setPayoutError("Switching network to Arc Testnet...");
+      if (switchToArcTestnetAsync) {
         try {
-          await switchToArcTestnet();
+          await switchToArcTestnetAsync();
+          // Wait briefly for network state sync
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         } catch (err) {
           console.error("Failed to switch network:", err);
+          setPayoutError("Failed to switch network. Please switch to Arc Testnet in your wallet.");
+          return;
         }
+      } else {
+        setPayoutError("Please switch to Arc Testnet in your wallet to execute payroll.");
+        return;
       }
-      return;
     }
 
     setIsExecuting(true);
@@ -1050,10 +1056,11 @@ export default function PayrollPage() {
                               </p>
                               <Button 
                                 onClick={() => setIsPayoutModalOpen(true)}
+                                disabled={!isArcTestnet}
                                 className="w-full btn-electric gap-2"
                               >
                                 <Send className="h-4 w-4" />
-                                Confirm Payout
+                                {!isArcTestnet ? "Switch Network to execute" : "Confirm Payout"}
                               </Button>
                             </div>
                           )}

@@ -1140,7 +1140,7 @@ export default function PayrollPage() {
                 <div>
                   <h3 className="text-lg font-bold text-white">Confirm Payroll Payouts</h3>
                   <p className="text-xs text-slate-400 mt-1">
-                    Direct USDC transfers from founder wallet to contributors on Arc Testnet.
+                    Batch payroll execution through the ArcPayroll smart contract on Arc Testnet.
                   </p>
                 </div>
                 {!isExecuting && (
@@ -1292,11 +1292,9 @@ export default function PayrollPage() {
                         <Loader2 className="h-4 w-4 animate-spin text-[#4f8cff]" />
                         <span>
                           {currentExecutionIndex === -2 ? (
-                            "Approving USDC allowance... Please confirm in wallet."
-                          ) : currentExecutionIndex === -3 ? (
-                            "Executing batch payroll... Please confirm in wallet."
+                            "Approving USDC allowance..."
                           ) : (
-                            `Executing payouts sequentially (${currentExecutionIndex + 1} of ${activeBatch.contributors.length}). Do not close...`
+                            "Executing batch payroll through ArcPayroll contract..."
                           )}
                         </span>
                       </div>

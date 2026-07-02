@@ -189,7 +189,12 @@ export default function PayrollPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Wagmi wallet read/write hooks
-  const { data: usdcBalance, refetch: refetchUsdc } = useReadContract({
+  const { 
+    data: usdcBalance, 
+    refetch: refetchUsdc,
+    error: usdcBalanceError,
+    isError: isUsdcBalanceError
+  } = useReadContract({
     address: USDC_ADDRESS,
     abi: ERC20_ABI,
     functionName: "balanceOf",
@@ -199,7 +204,12 @@ export default function PayrollPage() {
     }
   });
 
-  const { data: usdcAllowance, refetch: refetchAllowance } = useReadContract({
+  const { 
+    data: usdcAllowance, 
+    refetch: refetchAllowance,
+    error: usdcAllowanceError,
+    isError: isUsdcAllowanceError
+  } = useReadContract({
     address: USDC_ADDRESS,
     abi: ERC20_ABI,
     functionName: "allowance",
@@ -211,6 +221,33 @@ export default function PayrollPage() {
 
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient({ chainId: 5042002 });
+
+  useEffect(() => {
+    if (isUsdcBalanceError && usdcBalanceError) {
+      console.error("[DEBUG ERROR] [useReadContract - balanceOf] failed. Exact Function: balanceOf. Line: 192. Complete Error Object:", usdcBalanceError);
+      console.log("[DEBUG DATA] balanceOf parameters:", {
+        USDC_ADDRESS,
+        PAYROLL_ADDRESS,
+        connectedWalletAddress: address,
+        owner: address,
+        args: isArcTestnet && address ? [address] : undefined,
+      });
+    }
+  }, [isUsdcBalanceError, usdcBalanceError, address, isArcTestnet]);
+
+  useEffect(() => {
+    if (isUsdcAllowanceError && usdcAllowanceError) {
+      console.error("[DEBUG ERROR] [useReadContract - allowance] failed. Exact Function: allowance. Line: 202. Complete Error Object:", usdcAllowanceError);
+      console.log("[DEBUG DATA] allowance parameters:", {
+        USDC_ADDRESS,
+        PAYROLL_ADDRESS,
+        connectedWalletAddress: address,
+        owner: address,
+        spender: PAYROLL_ADDRESS,
+        args: isArcTestnet && address ? [address, PAYROLL_ADDRESS] : undefined,
+      });
+    }
+  }, [isUsdcAllowanceError, usdcAllowanceError, address, isArcTestnet]);
 
   useEffect(() => {
     setMounted(true);
@@ -573,20 +610,55 @@ export default function PayrollPage() {
       if (currentAllowance < totalAmountUnits) {
         setCurrentExecutionIndex(-2); // Display: "Approving USDC allowance..."
         
-        const approveHash = await writeContractAsync({
-          address: USDC_ADDRESS,
-          abi: ERC20_ABI,
-          functionName: "approve",
-          args: [PAYROLL_ADDRESS, totalAmountUnits],
-          chainId: 5042002,
-        });
+        let approveHash;
+        try {
+          console.log("[DEBUG] Initiating approve() interaction at line 580. Details:", {
+            PAYROLL_ADDRESS,
+            USDC_ADDRESS,
+            connectedWalletAddress: address,
+            spender: PAYROLL_ADDRESS,
+            owner: address,
+            args: [PAYROLL_ADDRESS, totalAmountUnits],
+          });
+          approveHash = await writeContractAsync({
+            address: USDC_ADDRESS,
+            abi: ERC20_ABI,
+            functionName: "approve",
+            args: [PAYROLL_ADDRESS, totalAmountUnits],
+            chainId: 5042002,
+          });
+        } catch (err: unknown) {
+          console.error("[DEBUG ERROR] [writeContractAsync - approve] failed. Exact Function: approve. Line: 580. Complete Error Object:", err);
+          console.log("[DEBUG DATA] approve parameters:", {
+            PAYROLL_ADDRESS,
+            USDC_ADDRESS,
+            connectedWalletAddress: address,
+            spender: PAYROLL_ADDRESS,
+            owner: address,
+            args: [PAYROLL_ADDRESS, totalAmountUnits],
+          });
+          throw err;
+        }
 
         if (publicClient) {
-          await publicClient.waitForTransactionReceipt({ hash: approveHash });
+          try {
+            console.log("[DEBUG] Calling waitForTransactionReceipt for approve at line 608");
+            await publicClient.waitForTransactionReceipt({ hash: approveHash });
+          } catch (err: unknown) {
+            console.error("[DEBUG ERROR] [waitForTransactionReceipt - approve] failed. Exact Function: waitForTransactionReceipt (approve). Line: 608. Complete Error Object:", err);
+            console.log("[DEBUG DATA] waitForTransactionReceipt approve hash:", approveHash);
+            throw err;
+          }
         }
         
         if (refetchAllowance) {
-          await refetchAllowance();
+          try {
+            console.log("[DEBUG] Calling refetchAllowance at line 619");
+            await refetchAllowance();
+          } catch (err: unknown) {
+            console.error("[DEBUG ERROR] [refetchAllowance] failed. Exact Function: refetchAllowance. Line: 619. Complete Error Object:", err);
+            throw err;
+          }
         }
       }
 
@@ -596,16 +668,43 @@ export default function PayrollPage() {
       const recipients = updatedContributors.map(c => c.walletAddress as `0x${string}`);
       const amounts = updatedContributors.map(c => parseUnits(c.salaryAmount.toString(), 6));
 
-      const batchHash = await writeContractAsync({
-        address: PAYROLL_ADDRESS,
-        abi: PAYROLL_ABI,
-        functionName: "batchPayEmployees",
-        args: [recipients, amounts],
-        chainId: 5042002,
-      });
+      let batchHash;
+      try {
+        console.log("[DEBUG] Initiating batchPayEmployees() interaction at line 639. Details:", {
+          PAYROLL_ADDRESS,
+          USDC_ADDRESS,
+          connectedWalletAddress: address,
+          recipientAddresses: recipients,
+          args: [recipients, amounts],
+        });
+        batchHash = await writeContractAsync({
+          address: PAYROLL_ADDRESS,
+          abi: PAYROLL_ABI,
+          functionName: "batchPayEmployees",
+          args: [recipients, amounts],
+          chainId: 5042002,
+        });
+      } catch (err: unknown) {
+        console.error("[DEBUG ERROR] [writeContractAsync - batchPayEmployees] failed. Exact Function: batchPayEmployees. Line: 639. Complete Error Object:", err);
+        console.log("[DEBUG DATA] batchPayEmployees parameters:", {
+          PAYROLL_ADDRESS,
+          USDC_ADDRESS,
+          connectedWalletAddress: address,
+          recipientAddresses: recipients,
+          args: [recipients, amounts],
+        });
+        throw err;
+      }
 
       if (publicClient) {
-        await publicClient.waitForTransactionReceipt({ hash: batchHash });
+        try {
+          console.log("[DEBUG] Calling waitForTransactionReceipt for batchPayEmployees at line 667");
+          await publicClient.waitForTransactionReceipt({ hash: batchHash });
+        } catch (err: unknown) {
+          console.error("[DEBUG ERROR] [waitForTransactionReceipt - batchPayEmployees] failed. Exact Function: waitForTransactionReceipt (batchPayEmployees). Line: 667. Complete Error Object:", err);
+          console.log("[DEBUG DATA] waitForTransactionReceipt batchPayEmployees hash:", batchHash);
+          throw err;
+        }
       }
 
       // Success: Mark all as Paid
@@ -628,6 +727,7 @@ export default function PayrollPage() {
       setIsPayoutModalOpen(false);
 
     } catch (error) {
+      console.error("[DEBUG ERROR] Main catch block in handleExecutePayout. Complete Error Object:", error);
       const err = error as { name?: string; code?: number; message?: string; shortMessage?: string };
       const msg = err.shortMessage || err.message || "Transaction failed";
       

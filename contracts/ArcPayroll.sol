@@ -32,7 +32,7 @@ contract ArcPayroll is Ownable, ReentrancyGuard, Pausable {
     function batchPayEmployees(
         address[] calldata recipients,
         uint256[] calldata amounts
-    ) external onlyOwner nonReentrant whenNotPaused {
+    ) external nonReentrant whenNotPaused {
         require(recipients.length > 0, "ArcPayroll: Recipients list cannot be empty");
         require(recipients.length == amounts.length, "ArcPayroll: Recipients and amounts arrays length mismatch");
 
